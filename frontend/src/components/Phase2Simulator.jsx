@@ -1,183 +1,91 @@
-import React, { useState } from 'react'
-import FileUpload from './FileUpload'
+import React, { useState, useEffect } from 'react';
+import FileUpload from './FileUpload';
+import { executePhase2, checkHealth } from '../services/api';
 
 const Phase2Simulator = () => {
-  const [fileContent, setFileContent] = useState('')
-  const [output, setOutput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [fileName, setFileName] = useState('')
+  const [fileContent, setFileContent] = useState('');
+  const [output, setOutput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [backendStatus, setBackendStatus] = useState('checking');
+
+  useEffect(() => {
+    const checkBackend = async () => {
+      const isHealthy = await checkHealth();
+      setBackendStatus(isHealthy ? 'connected' : 'disconnected');
+    };
+    checkBackend();
+  }, []);
 
   const handleFileUpload = async (file) => {
-    setLoading(true)
-    setError('')
-    setFileName(file.name)
+    setLoading(true);
+    setError('');
+    setFileName(file.name);
     
     try {
-      const content = await readFileContent(file)
-      setFileContent(content)
-      
-      // Simulate execution
-      const result = await simulatePhase2Execution(content)
-      setOutput(result)
+      const content = await readFileContent(file);
+      setFileContent(content);
     } catch (err) {
-      setError('Error reading file: ' + err.message)
+      setError('Error reading file: ' + err.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const readFileContent = (file) => {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = (e) => resolve(e.target.result)
-      reader.onerror = (e) => reject(e)
-      reader.readAsText(file)
-    })
-  }
-
-  const simulatePhase2Execution = async (content) => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const simulatedOutput = `=== OS SIMULATOR - PHASE 2 ===
-Page Size: 1024 bytes
-Physical Memory: 64 frames
-Virtual Memory: 256 pages per process
-
-Command [2]: CREATE 1 5
-Process 1 created with 5 pages
-
-Command [3]: CREATE 2 3
-Process 2 created with 3 pages
-
-Command [6]: ACCESS 1 0
-Accessing virtual address 0 of process 1
-TLB Miss: Process 1, Page 0
-PAGE FAULT: Process 1, Page 0
-Allocated frame 0 to page 0 of process 1
-Physical address: 0
-
-Command [7]: ACCESS 1 1024
-Accessing virtual address 1024 of process 1
-TLB Miss: Process 1, Page 1
-PAGE FAULT: Process 1, Page 1
-Allocated frame 1 to page 1 of process 1
-Physical address: 1024
-
-Command [8]: ACCESS 2 0
-Accessing virtual address 0 of process 2
-TLB Miss: Process 2, Page 0
-PAGE FAULT: Process 2, Page 0
-Allocated frame 2 to page 0 of process 2
-Physical address: 2048
-
-Command [11]: WRITE 1 2048
-Writing to virtual address 2048 of process 1
-TLB Miss: Process 1, Page 2
-PAGE FAULT: Process 1, Page 2
-Allocated frame 3 to page 2 of process 1
-Physical address: 3072
-
-Command [12]: WRITE 2 512
-Writing to virtual address 512 of process 2
-TLB Hit: Process 2, Page 0
-Physical address: 2560
-
-Command [15]: ACCESS 1 0
-Accessing virtual address 0 of process 1
-TLB Hit: Process 1, Page 0
-Physical address: 0
-
-Command [16]: ACCESS 2 0
-Accessing virtual address 0 of process 2
-TLB Hit: Process 2, Page 0
-Physical address: 2048
-
-Command [19]: MEMMAP
-
-=== MEMORY MAP ===
-Process 1 (State: READY)
-  Page Faults: 3
-  Valid Pages: 0->0 1->1 2->3 
-Process 2 (State: READY)
-  Page Faults: 1
-  Valid Pages: 0->2 
-==================
-
-Command [22]: STATS
-
-=== SYSTEM STATISTICS ===
-TLB Hits: 3
-TLB Misses: 4
-TLB Hit Rate: 42.86%
-Free Frames: 60/64
-Active Processes: 2
-=========================
-
-Command [25]: TERMINATE 1
-Process 1 terminated. Page faults: 3
-
-Command [28]: MEMMAP
-
-=== MEMORY MAP ===
-Process 2 (State: READY)
-  Page Faults: 1
-  Valid Pages: 0->2 
-==================
-
-Command [31]: TERMINATE 2
-Process 2 terminated. Page faults: 1
-
-Command [34]: STATS
-
-=== SYSTEM STATISTICS ===
-TLB Hits: 3
-TLB Misses: 4
-TLB Hit Rate: 42.86%
-Free Frames: 64/64
-Active Processes: 0
-=========================
-
-
-=== FINAL STATISTICS ===
-
-=== SYSTEM STATISTICS ===
-TLB Hits: 3
-TLB Misses: 4
-TLB Hit Rate: 42.86%
-Free Frames: 64/64
-Active Processes: 0
-=========================
-
-=== MEMORY MAP ===
-==================`
-        resolve(simulatedOutput)
-      }, 2000)
-    })
-  }
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = (e) => reject(e);
+      reader.readAsText(file);
+    });
+  };
 
   const handleRunSimulation = async () => {
     if (!fileContent) {
-      setError('Please upload a file first')
-      return
+      setError('Please upload a file first');
+      return;
     }
 
-    setLoading(true)
-    setError('')
+    if (backendStatus !== 'connected') {
+      setError('Backend server is not connected. Please start the backend server first.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
     
     try {
-      const result = await simulatePhase2Execution(fileContent)
-      setOutput(result)
+      const result = await executePhase2(fileContent);
+      setOutput(result.output);
     } catch (err) {
-      setError('Simulation error: ' + err.message)
+      setError('Simulation error: ' + err.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div>
       <h2>Phase 2 - Memory Management Simulator</h2>
+      
+      {/* Backend Status Indicator */}
+      <div style={{ 
+        padding: '10px', 
+        marginBottom: '20px', 
+        borderRadius: '5px',
+        backgroundColor: backendStatus === 'connected' ? '#d4edda' : '#f8d7da',
+        color: backendStatus === 'connected' ? '#155724' : '#721c24',
+        border: `1px solid ${backendStatus === 'connected' ? '#c3e6cb' : '#f5c6cb'}`
+      }}>
+        <strong>Backend Status:</strong> {backendStatus === 'connected' ? '✅ Connected' : '❌ Disconnected'}
+        {backendStatus !== 'connected' && (
+          <div style={{ fontSize: '0.9em', marginTop: '5px' }}>
+            Please make sure the backend server is running on http://localhost:5000
+          </div>
+        )}
+      </div>
       
       <FileUpload 
         onFileUpload={handleFileUpload}
@@ -196,9 +104,9 @@ Active Processes: 0
           <button 
             className="upload-btn"
             onClick={handleRunSimulation}
-            disabled={loading}
+            disabled={loading || backendStatus !== 'connected'}
           >
-            {loading ? 'Running...' : 'Run Simulation'}
+            {loading ? 'Running Simulation...' : 'Run Simulation'}
           </button>
         </div>
       )}
@@ -211,7 +119,7 @@ Active Processes: 0
 
       {loading && (
         <div className="loading">
-          Running Memory Management Simulation...
+          Executing Memory Management Simulation via Backend...
         </div>
       )}
 
@@ -269,4 +177,4 @@ STATS`}
   )
 }
 
-export default Phase2Simulator
+export default Phase2Simulator;

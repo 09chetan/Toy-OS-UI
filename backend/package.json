@@ -1,0 +1,18 @@
+{
+  "name": "os-simulator-backend",
+  "version": "1.0.0",
+  "description": "Backend server for OS Simulator",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "compile": "g++ -o phase1.exe phase1.cpp && g++ -o phase2.exe phase2.cpp"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

@@ -9,12 +9,13 @@
 
 using namespace std;
 
-// Constants and structures remain the same as your original code
-const int PAGE_SIZE = 1024;
-const int PHYSICAL_MEMORY_SIZE = 64;
-const int VIRTUAL_MEMORY_SIZE = 256;
-const int TLB_SIZE = 4;
+// Constants
+const int PAGE_SIZE = 1024;           // 1KB page size
+const int PHYSICAL_MEMORY_SIZE = 64;  // 64 pages in physical memory
+const int VIRTUAL_MEMORY_SIZE = 256;  // 256 pages per process
+const int TLB_SIZE = 4;               // Translation Lookaside Buffer size
 
+// Interrupt Types
 enum InterruptType {
     PAGE_FAULT,
     INVALID_ACCESS,
@@ -22,6 +23,7 @@ enum InterruptType {
     TIMER_INTERRUPT
 };
 
+// Process State
 enum ProcessState {
     NEW,
     READY,
@@ -30,6 +32,7 @@ enum ProcessState {
     TERMINATED
 };
 
+// Page Table Entry
 struct PageTableEntry {
     int frameNumber;
     bool valid;
@@ -39,6 +42,7 @@ struct PageTableEntry {
     PageTableEntry() : frameNumber(-1), valid(false), dirty(false), referenced(false) {}
 };
 
+// TLB Entry
 struct TLBEntry {
     int pid;
     int pageNumber;
@@ -48,6 +52,7 @@ struct TLBEntry {
     TLBEntry() : pid(-1), pageNumber(-1), frameNumber(-1), valid(false) {}
 };
 
+// Process Control Block
 class PCB {
 public:
     int pid;
@@ -64,29 +69,46 @@ public:
     }
 };
 
+// Memory Management Unit
 class MMU {
 private:
-    vector<bool> physicalMemory;
+    vector<bool> physicalMemory;  // Frame allocation bitmap
     queue<int> freeFrames;
     vector<TLBEntry> tlb;
     int tlbHits;
     int tlbMisses;
     map<int, PCB*> processTable;
-    stringstream output;
-    queue<pair<int, int>> fifoQueue;
+    stringstream output;  // Changed from ofstream& to stringstream
+    
+    // FIFO page replacement
+    queue<pair<int, int>> fifoQueue;  // (pid, pageNumber)
     
 public:
-    MMU() : tlbHits(0), tlbMisses(0) {
+    // Original constructor for file output
+    MMU(ofstream& out) : tlbHits(0), tlbMisses(0) {
         physicalMemory.resize(PHYSICAL_MEMORY_SIZE, false);
         tlb.resize(TLB_SIZE);
         
+        // Initialize free frames
         for (int i = 0; i < PHYSICAL_MEMORY_SIZE; i++) {
             freeFrames.push(i);
         }
     }
     
-    string executeCommands(const string& input) {
-        output.str("");
+    // New constructor for API output
+    MMU() : tlbHits(0), tlbMisses(0) {
+        physicalMemory.resize(PHYSICAL_MEMORY_SIZE, false);
+        tlb.resize(TLB_SIZE);
+        
+        // Initialize free frames
+        for (int i = 0; i < PHYSICAL_MEMORY_SIZE; i++) {
+            freeFrames.push(i);
+        }
+    }
+    
+    // Execute commands from string input
+    string executeCommands(const string& inputContent) {
+        output.str(""); // Clear previous output
         output.clear();
         
         output << "=== OS SIMULATOR - PHASE 2 ===\n";
@@ -94,15 +116,15 @@ public:
         output << "Physical Memory: " << PHYSICAL_MEMORY_SIZE << " frames\n";
         output << "Virtual Memory: " << VIRTUAL_MEMORY_SIZE << " pages per process\n\n";
         
-        istringstream inputStream(input);
+        istringstream input(inputContent);
         string line;
         int lineNum = 0;
         
-        while (getline(inputStream, line)) {
+        while (getline(input, line)) {
             lineNum++;
             
             if (line.empty() || line[0] == '#') {
-                continue;
+                continue;  // Skip empty lines and comments
             }
             
             output << "Command [" << lineNum << "]: " << line << "\n";
@@ -159,6 +181,7 @@ public:
         return output.str();
     }
     
+    // Create a new process
     void createProcess(int pid, int pages) {
         if (processTable.find(pid) != processTable.end()) {
             output << "Error: Process " << pid << " already exists\n";
@@ -171,6 +194,7 @@ public:
         output << "Process " << pid << " created with " << pages << " pages\n";
     }
     
+    // Allocate a frame
     int allocateFrame() {
         if (!freeFrames.empty()) {
             int frame = freeFrames.front();
@@ -178,9 +202,10 @@ public:
             physicalMemory[frame] = true;
             return frame;
         }
-        return -1;
+        return -1;  // No free frames
     }
     
+    // Free a frame
     void freeFrame(int frame) {
         if (frame >= 0 && frame < PHYSICAL_MEMORY_SIZE) {
             physicalMemory[frame] = false;
@@ -188,6 +213,7 @@ public:
         }
     }
     
+    // Page replacement using FIFO
     int replacePage() {
         if (fifoQueue.empty()) {
             return -1;
@@ -213,6 +239,7 @@ public:
                 pcb->pageTable[victimPage].valid = false;
                 pcb->pageTable[victimPage].frameNumber = -1;
                 
+                // Invalidate TLB entry
                 for (auto& entry : tlb) {
                     if (entry.valid && entry.pid == victimPid && entry.pageNumber == victimPage) {
                         entry.valid = false;
@@ -226,6 +253,7 @@ public:
         return allocateFrame();
     }
     
+    // Handle page fault
     void handlePageFault(int pid, int pageNumber) {
         output << "PAGE FAULT: Process " << pid << ", Page " << pageNumber << "\n";
         
@@ -260,10 +288,12 @@ public:
         output << "Allocated frame " << frame << " to page " << pageNumber << " of process " << pid << "\n";
     }
     
+    // Translate virtual address to physical address
     int translateAddress(int pid, int virtualAddr, bool write = false) {
         int pageNumber = virtualAddr / PAGE_SIZE;
         int offset = virtualAddr % PAGE_SIZE;
         
+        // Check TLB first
         for (int i = 0; i < TLB_SIZE; i++) {
             if (tlb[i].valid && tlb[i].pid == pid && tlb[i].pageNumber == pageNumber) {
                 tlbHits++;
@@ -303,6 +333,7 @@ public:
             pcb->pageTable[pageNumber].dirty = true;
         }
         
+        // Update TLB (FIFO replacement)
         static int tlbIndex = 0;
         tlb[tlbIndex].pid = pid;
         tlb[tlbIndex].pageNumber = pageNumber;
@@ -313,6 +344,7 @@ public:
         return frame * PAGE_SIZE + offset;
     }
     
+    // Handle interrupts
     void handleInterrupt(InterruptType type, int pid, int addr) {
         output << "\n=== INTERRUPT HANDLER ===\n";
         
@@ -344,6 +376,7 @@ public:
         output << "=========================\n\n";
     }
     
+    // Terminate process
     void terminateProcess(int pid) {
         if (processTable.find(pid) == processTable.end()) {
             output << "Error: Process " << pid << " not found\n";
@@ -352,12 +385,14 @@ public:
         
         PCB* pcb = processTable[pid];
         
+        // Free all allocated frames
         for (int i = 0; i < pcb->pageTable.size(); i++) {
             if (pcb->pageTable[i].valid) {
                 freeFrame(pcb->pageTable[i].frameNumber);
             }
         }
         
+        // Clear TLB entries
         for (auto& entry : tlb) {
             if (entry.valid && entry.pid == pid) {
                 entry.valid = false;
@@ -371,6 +406,7 @@ public:
         processTable.erase(pid);
     }
     
+    // Print statistics
     void printStatistics() {
         output << "\n=== SYSTEM STATISTICS ===\n";
         output << "TLB Hits: " << tlbHits << "\n";
@@ -386,6 +422,7 @@ public:
         output << "=========================\n";
     }
     
+    // Print memory map
     void printMemoryMap() {
         output << "\n=== MEMORY MAP ===\n";
         for (auto& pair : processTable) {
@@ -421,29 +458,127 @@ public:
     }
 };
 
-// For direct execution
-int main(int argc, char* argv[]) {
-    if (argc != 3) {
-        cout << "Usage: phase2 <input_file> <output_file>" << endl;
-        return 1;
-    }
-    
-    ifstream input(argv[1]);
-    ofstream output(argv[2]);
+// Original main function for file-based execution
+int main_original() {
+    ifstream input("input_phase2.txt");
+    ofstream output("output.txt");
     
     if (!input.is_open()) {
-        cout << "Error opening input file" << endl;
+        cerr << "Error opening input file\n";
         return 1;
     }
     
-    string content((istreambuf_iterator<char>(input)), 
-                   istreambuf_iterator<char>());
+    MMU mmu(output);
     
-    MMU mmu;
-    string result = mmu.executeCommands(content);
-    output << result;
+    output << "=== OS SIMULATOR - PHASE 2 ===\n";
+    output << "Page Size: " << PAGE_SIZE << " bytes\n";
+    output << "Physical Memory: " << PHYSICAL_MEMORY_SIZE << " frames\n";
+    output << "Virtual Memory: " << VIRTUAL_MEMORY_SIZE << " pages per process\n\n";
+    
+    string line;
+    int lineNum = 0;
+    
+    while (getline(input, line)) {
+        lineNum++;
+        
+        if (line.empty() || line[0] == '#') {
+            continue;  // Skip empty lines and comments
+        }
+        
+        output << "Command [" << lineNum << "]: " << line << "\n";
+        
+        istringstream iss(line);
+        string command;
+        iss >> command;
+        
+        if (command == "CREATE") {
+            int pid, pages;
+            iss >> pid >> pages;
+            mmu.createProcess(pid, pages);
+        }
+        else if (command == "ACCESS") {
+            int pid, addr;
+            iss >> pid >> addr;
+            output << "Accessing virtual address " << addr << " of process " << pid << "\n";
+            int physAddr = mmu.translateAddress(pid, addr, false);
+            if (physAddr != -1) {
+                output << "Physical address: " << physAddr << "\n";
+            }
+        }
+        else if (command == "WRITE") {
+            int pid, addr;
+            iss >> pid >> addr;
+            output << "Writing to virtual address " << addr << " of process " << pid << "\n";
+            int physAddr = mmu.translateAddress(pid, addr, true);
+            if (physAddr != -1) {
+                output << "Physical address: " << physAddr << "\n";
+            }
+        }
+        else if (command == "TERMINATE") {
+            int pid;
+            iss >> pid;
+            mmu.terminateProcess(pid);
+        }
+        else if (command == "STATS") {
+            mmu.printStatistics();
+        }
+        else if (command == "MEMMAP") {
+            mmu.printMemoryMap();
+        }
+        else {
+            output << "Unknown command: " << command << "\n";
+        }
+        
+        output << "\n";
+    }
+    
+    output << "\n=== FINAL STATISTICS ===\n";
+    mmu.printStatistics();
+    mmu.printMemoryMap();
     
     input.close();
     output.close();
+    
+    cout << "Simulation complete. Check output.txt for results.\n";
+    
     return 0;
+}
+
+// New main function for CLI execution with backend integration
+int main(int argc, char* argv[]) {
+    if (argc == 1) {
+        // No arguments - run original behavior
+        return main_original();
+    }
+    else if (argc == 3) {
+        // CLI mode: phase2.exe input.txt output.txt
+        ifstream inputFile(argv[1]);
+        if (!inputFile.is_open()) {
+            cerr << "Error: Cannot open input file " << argv[1] << endl;
+            return 1;
+        }
+        
+        string content((istreambuf_iterator<char>(inputFile)), 
+                      istreambuf_iterator<char>());
+        inputFile.close();
+        
+        MMU mmu;
+        string result = mmu.executeCommands(content);
+        
+        ofstream outputFile(argv[2]);
+        if (!outputFile.is_open()) {
+            cerr << "Error: Cannot open output file " << argv[2] << endl;
+            return 1;
+        }
+        
+        outputFile << result;
+        outputFile.close();
+        
+        return 0;
+    }
+    else {
+        cerr << "Usage: " << argv[0] << " [input_file output_file]" << endl;
+        cerr << "If no arguments provided, uses default input_phase2.txt" << endl;
+        return 1;
+    }
 }

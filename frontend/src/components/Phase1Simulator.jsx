@@ -1,93 +1,92 @@
-import React, { useState } from 'react'
-import FileUpload from './FileUpload'
+import React, { useState, useEffect } from 'react';
+import FileUpload from './FileUpload';
+import { executePhase1, checkHealth } from '../services/api';
 
 const Phase1Simulator = () => {
-  const [fileContent, setFileContent] = useState('')
-  const [output, setOutput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [fileName, setFileName] = useState('')
+  const [fileContent, setFileContent] = useState('');
+  const [output, setOutput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [backendStatus, setBackendStatus] = useState('checking');
+
+  // Check backend health on component mount
+  useEffect(() => {
+    const checkBackend = async () => {
+      const isHealthy = await checkHealth();
+      setBackendStatus(isHealthy ? 'connected' : 'disconnected');
+    };
+    checkBackend();
+  }, []);
 
   const handleFileUpload = async (file) => {
-    setLoading(true)
-    setError('')
-    setFileName(file.name)
+    setLoading(true);
+    setError('');
+    setFileName(file.name);
     
     try {
-      const content = await readFileContent(file)
-      setFileContent(content)
-      
-      // Simulate execution (in real app, this would call your C++ backend)
-      const result = await simulatePhase1Execution(content)
-      setOutput(result)
+      const content = await readFileContent(file);
+      setFileContent(content);
     } catch (err) {
-      setError('Error reading file: ' + err.message)
+      setError('Error reading file: ' + err.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const readFileContent = (file) => {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = (e) => resolve(e.target.result)
-      reader.onerror = (e) => reject(e)
-      reader.readAsText(file)
-    })
-  }
-
-  const simulatePhase1Execution = async (content) => {
-    // Simulate API call to backend
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        // This is where you would integrate with your actual C++ backend
-        // For now, we'll simulate the output
-        const simulatedOutput = `Virtual Machine Simulation Started...
-Processing file content...
-
-Input Program:
-${content}
-
-Execution Trace:
-New Job started
-Program Card loading
-Data card loading
-Read function called
-Write function called
-HELLO WORLD
-Terminate called
-
-END of Job
-
-Simulation completed successfully!`
-        resolve(simulatedOutput)
-      }, 2000)
-    })
-  }
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = (e) => reject(e);
+      reader.readAsText(file);
+    });
+  };
 
   const handleRunSimulation = async () => {
     if (!fileContent) {
-      setError('Please upload a file first')
-      return
+      setError('Please upload a file first');
+      return;
     }
 
-    setLoading(true)
-    setError('')
+    if (backendStatus !== 'connected') {
+      setError('Backend server is not connected. Please start the backend server first.');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
     
     try {
-      // In a real implementation, this would call your backend API
-      const result = await simulatePhase1Execution(fileContent)
-      setOutput(result)
+      const result = await executePhase1(fileContent);
+      setOutput(result.output);
     } catch (err) {
-      setError('Simulation error: ' + err.message)
+      setError('Simulation error: ' + err.message);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div>
       <h2>Phase 1 - Virtual Machine Simulator</h2>
+      
+      {/* Backend Status Indicator */}
+      <div style={{ 
+        padding: '10px', 
+        marginBottom: '20px', 
+        borderRadius: '5px',
+        backgroundColor: backendStatus === 'connected' ? '#d4edda' : '#f8d7da',
+        color: backendStatus === 'connected' ? '#155724' : '#721c24',
+        border: `1px solid ${backendStatus === 'connected' ? '#c3e6cb' : '#f5c6cb'}`
+      }}>
+        <strong>Backend Status:</strong> {backendStatus === 'connected' ? '✅ Connected' : '❌ Disconnected'}
+        {backendStatus !== 'connected' && (
+          <div style={{ fontSize: '0.9em', marginTop: '5px' }}>
+            Please make sure the backend server is running on http://localhost:5000
+          </div>
+        )}
+      </div>
       
       <FileUpload 
         onFileUpload={handleFileUpload}
@@ -106,9 +105,9 @@ Simulation completed successfully!`
           <button 
             className="upload-btn"
             onClick={handleRunSimulation}
-            disabled={loading}
+            disabled={loading || backendStatus !== 'connected'}
           >
-            {loading ? 'Running...' : 'Run Simulation'}
+            {loading ? 'Running Simulation...' : 'Run Simulation'}
           </button>
         </div>
       )}
@@ -121,7 +120,7 @@ Simulation completed successfully!`
 
       {loading && (
         <div className="loading">
-          Running Virtual Machine Simulation...
+          Executing Virtual Machine Simulation via Backend...
         </div>
       )}
 
@@ -150,4 +149,4 @@ $END0001`}
   )
 }
 
-export default Phase1Simulator
+export default Phase1Simulator;
